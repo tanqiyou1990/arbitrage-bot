@@ -85,6 +85,19 @@ class WebSocketClient {
       setTimeout(() => this.connect(), this.reconnectDelay);
     }
   }
+
+  close() {
+    try {
+      if (this.ws) {
+        clearInterval(this.heartbeatInterval);
+        this.ws.terminate(); // 使用 terminate 来强制关闭连接
+        this.ws.close(); // 正常关闭连接
+        this.ws = null;
+      }
+    } catch (error) {
+      logger.error(`${this.options.name} 关闭连接错误:`, error);
+    }
+  }
 }
 
 // 创建交易管理对象
@@ -342,9 +355,19 @@ const bitgetClient = new WebSocketClient("wss://ws.bitget.com/v2/ws/public", {
 });
 
 // 优雅退出
+// 修改优雅退出的处理
 process.on("SIGINT", () => {
-  console.log("Closing WebSocket connections...");
-  binanceClient.close();
-  bitgetClient.close();
-  process.exit();
+  logger.info("正在关闭 WebSocket 连接...");
+  try {
+    if (binanceClient && typeof binanceClient.close === "function") {
+      binanceClient.close();
+    }
+    if (bitgetClient && typeof bitgetClient.close === "function") {
+      bitgetClient.close();
+    }
+  } catch (error) {
+    logger.error("关闭连接时发生错误:", error);
+  } finally {
+    process.exit(0);
+  }
 });
