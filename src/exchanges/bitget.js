@@ -169,6 +169,33 @@ class BitgetAPI {
     });
     return response.data;
   }
+
+  async getAccountBalance() {
+    const endpoint = "/api/mix/v1/account/accounts";
+    const timestamp = Date.now().toString();
+    const body = {
+      symbol: this.symbol,
+      marginCoin: "USDT",
+    };
+
+    const signature = this.generateSignature(
+      timestamp,
+      "GET",
+      endpoint,
+      JSON.stringify(body)
+    );
+
+    const response = await axios.get(`${this.baseUrl}${endpoint}`, {
+      headers: {
+        "ACCESS-KEY": this.apiKey,
+        "ACCESS-SIGN": signature,
+        "ACCESS-TIMESTAMP": timestamp,
+        "ACCESS-PASSPHRASE": this.passphrase,
+      },
+      params: body,
+    });
+    return response.data;
+  }
 }
 
 module.exports = BitgetAPI;

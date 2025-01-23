@@ -2,7 +2,7 @@ const axios = require("axios");
 const config = require("../config");
 const BinanceAPI = require("./binance");
 const BitgetAPI = require("./bitget");
-const logger = require("../logger");
+const logger = require("../logger"); // 修改为正确的相对路径
 
 // 实盘交易类
 class LiveTrader {

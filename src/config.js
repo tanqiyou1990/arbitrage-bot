@@ -1,6 +1,6 @@
 module.exports = {
   mode: process.env.TRADING_MODE || "simulation",
-  maxPositionAmount: process.env.MAX_POSITION_AMOUNT || 1000, // 最大保证金额度
+  maxPositionAmount: process.env.MAX_POSITION_AMOUNT || 1000, // 10000U账户情况下最大保证金额度
   leverage: process.env.LEVERAGE || 100,
   orderSizeRatio: process.env.ORDER_SIZE_RATIO || 0.7,
   threshold: process.env.PRICE_THRESHOLD || 0.0006,
@@ -22,4 +22,5 @@ module.exports = {
       passphrase: process.env.BITGET_PASSPHRASE,
     },
   },
+  stopLossPercentage: process.env.STOP_LOSS_PERCENTAGE || 0.9, // 距离爆仓线90%时平仓
 };

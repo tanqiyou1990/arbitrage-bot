@@ -101,6 +101,23 @@ class BinanceAPI {
     });
     return response.data;
   }
+
+  async getAccountBalance() {
+    const endpoint = "/fapi/v2/account";
+    const timestamp = Date.now();
+    const params = { timestamp };
+    const signature = this.generateSignature(params);
+    const url = `${this.baseUrl}${endpoint}?${new URLSearchParams(
+      params
+    ).toString()}&signature=${signature}`;
+
+    const response = await axios.get(url, {
+      headers: {
+        "X-MBX-APIKEY": this.apiKey,
+      },
+    });
+    return response.data;
+  }
 }
 
 module.exports = BinanceAPI;
