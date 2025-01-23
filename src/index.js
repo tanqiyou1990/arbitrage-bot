@@ -1,5 +1,6 @@
 const WebSocket = require("ws");
 const winston = require("winston");
+const config = require("./config");
 
 // 配置日志系统
 const logger = winston.createLogger({
@@ -31,7 +32,7 @@ class WebSocketClient {
   constructor(url, options) {
     this.url = url;
     this.options = options;
-    this.reconnectDelay = 2000; // 重连延迟 10 分钟
+    this.reconnectDelay = config.reconnectDelay;
     this.heartbeatInterval = null;
     this.ws = null;
     this.connect();
@@ -94,17 +95,14 @@ const tradeManager = {
     binancePrice: 0,
     bitgetPrice: 0,
   },
-  // 添加手续费率设置
-  fees: {
-    binance: 0.0005, // 币安手续费率
-    bitget: 0.0005, // Bitget手续费率
-  },
+  fees: config.fees,
 
-  // 获取可下单数量
+  // 修改获取可下单数量的方法
   getOrderSize(binanceQty, bitgetQty) {
     return Math.min(
       parseFloat(binanceQty).toFixed(2),
-      parseFloat(bitgetQty).toFixed(2)
+      parseFloat(bitgetQty).toFixed(2),
+      config.maxPositionSize
     );
   },
 
@@ -205,7 +203,7 @@ const tradeManager = {
 const priceMonitor = {
   binance: { bids: [], asks: [] },
   bitget: { bids: [], asks: [] },
-  threshold: 0.0006,
+  threshold: config.threshold,
 
   checkPriceDifference() {
     // 计算第一组价差（Binance做多-Bitget做空）
@@ -329,7 +327,7 @@ const bitgetClient = new WebSocketClient("wss://ws.bitget.com/v2/ws/public", {
     ],
   },
   pingMessage: "ping",
-  pingInterval: 18000,
+  pingInterval: config.pingInterval,
   onMessage: (data) => {
     if (data.toString() !== "pong") {
       const message = JSON.parse(data.toString());
