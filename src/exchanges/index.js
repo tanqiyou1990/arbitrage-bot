@@ -1,80 +1,87 @@
 const axios = require("axios");
-const config = require("./config");
+const config = require("../config");
+const BinanceAPI = require("./binance");
+const BitgetAPI = require("./bitget");
+const logger = require("../logger");
 
 // 实盘交易类
 class LiveTrader {
   constructor(config) {
-    this.binanceConfig = config.binance;
-    this.bitgetConfig = config.bitget;
+    this.binanceAPI = new BinanceAPI(config.binance);
+    this.bitgetAPI = new BitgetAPI(config.bitget);
+    this.symbol = "ETHUSDT";
   }
 
-  async openPosition(type, size, binancePrice, bitgetPrice) {
-    try {
-      if (type === "long") {
-        // Binance做多，Bitget做空
-        await Promise.all([
-          this.binanceLongOrder(size, binancePrice),
-          this.bitgetShortOrder(size, bitgetPrice),
-        ]);
-      } else {
-        // Bitget做多，Binance做空
-        await Promise.all([
-          this.binanceShortOrder(size, binancePrice),
-          this.bitgetLongOrder(size, bitgetPrice),
-        ]);
-      }
-      return true;
-    } catch (error) {
-      logger.error("开仓失败:", error);
-      return false;
-    }
-  }
-
-  async closePosition(type, size, binancePrice, bitgetPrice) {
-    try {
-      if (type === "long") {
-        // 平仓：Binance卖出，Bitget买入
-        await Promise.all([
-          this.binanceCloseOrder(size, binancePrice, "long"),
-          this.bitgetCloseOrder(size, bitgetPrice, "short"),
-        ]);
-      } else {
-        // 平仓：Binance买入，Bitget卖出
-        await Promise.all([
-          this.binanceCloseOrder(size, binancePrice, "short"),
-          this.bitgetCloseOrder(size, bitgetPrice, "long"),
-        ]);
-      }
-      return true;
-    } catch (error) {
-      logger.error("平仓失败:", error);
-      return false;
-    }
-  }
-
-  // 实现具体的交易所API调用方法
   async binanceLongOrder(size, price) {
-    // 调用币安API开多仓
+    try {
+      const response = await this.binanceAPI.openLong(this.symbol, size);
+      logger.info("Binance开多成功:", response);
+      return true;
+    } catch (error) {
+      logger.error("Binance开多失败:", error);
+      return false;
+    }
   }
 
   async binanceShortOrder(size, price) {
-    // 调用币安API开空仓
+    try {
+      const response = await this.binanceAPI.openShort(this.symbol, size);
+      logger.info("Binance开空成功:", response);
+      return true;
+    } catch (error) {
+      logger.error("Binance开空失败:", error);
+      return false;
+    }
   }
 
   async bitgetLongOrder(size, price) {
-    // 调用Bitget API开多仓
+    try {
+      const response = await this.bitgetAPI.openLong(this.symbol, size);
+      logger.info("Bitget开多成功:", response);
+      return true;
+    } catch (error) {
+      logger.error("Bitget开多失败:", error);
+      return false;
+    }
   }
 
   async bitgetShortOrder(size, price) {
-    // 调用Bitget API开空仓
+    try {
+      const response = await this.bitgetAPI.openShort(this.symbol, size);
+      logger.info("Bitget开空成功:", response);
+      return true;
+    } catch (error) {
+      logger.error("Bitget开空失败:", error);
+      return false;
+    }
   }
 
   async binanceCloseOrder(size, price, positionType) {
-    // 调用币安API平仓
+    try {
+      const response =
+        positionType === "long"
+          ? await this.binanceAPI.closeLong(this.symbol, size)
+          : await this.binanceAPI.closeShort(this.symbol, size);
+      logger.info("Binance平仓成功:", response);
+      return true;
+    } catch (error) {
+      logger.error("Binance平仓失败:", error);
+      return false;
+    }
   }
 
   async bitgetCloseOrder(size, price, positionType) {
-    // 调用Bitget API平仓
+    try {
+      const response =
+        positionType === "long"
+          ? await this.bitgetAPI.closeLong(this.symbol, size)
+          : await this.bitgetAPI.closeShort(this.symbol, size);
+      logger.info("Bitget平仓成功:", response);
+      return true;
+    } catch (error) {
+      logger.error("Bitget平仓失败:", error);
+      return false;
+    }
   }
 }
 
