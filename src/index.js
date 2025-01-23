@@ -1,5 +1,4 @@
 const WebSocket = require("ws");
-const winston = require("winston");
 const config = require("./config");
 const logger = require("./logger");
 const { LiveTrader, SimulatedTrader } = require("./exchanges");
@@ -125,15 +124,20 @@ const tradeManager = {
   },
 
   // 计算爆仓价格
+  // 修改计算爆仓价格的方法
+  // 计算爆仓价格
   calculateLiquidationPrice(entryPrice, size, balance) {
-    const positionValue = entryPrice * size;
-    const margin = positionValue / config.leverage;
-    const maintenanceMargin = margin * 0.005; // 维持保证金率假设为0.5%
+    const contractValue = entryPrice * size; // 合约价值
+    const maintenanceMarginRate = 0.005; // 维持保证金率
+    const maintenanceMargin = contractValue * maintenanceMarginRate; // 维持保证金
 
+    // 对于做多，价格下跌会导致爆仓
     if (this.position.type === "long") {
-      return entryPrice * (1 - (balance - maintenanceMargin) / positionValue);
-    } else {
-      return entryPrice * (1 + (balance - maintenanceMargin) / positionValue);
+      return entryPrice * (1 - (balance - maintenanceMargin) / contractValue);
+    }
+    // 对于做空，价格上涨会导致爆仓
+    else {
+      return entryPrice * (1 + (balance - maintenanceMargin) / contractValue);
     }
   },
 
