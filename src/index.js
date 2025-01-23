@@ -112,11 +112,14 @@ const tradeManager = {
 
   // 修改获取可下单数量的方法
   getOrderSize(binanceQty, bitgetQty) {
-    return Math.min(
-      parseFloat(binanceQty).toFixed(2),
-      parseFloat(bitgetQty).toFixed(2),
-      config.maxPositionSize
+    const availableSize = Math.min(
+      parseFloat(binanceQty),
+      parseFloat(bitgetQty)
     );
+    // 应用下单数量比例限制
+    const sizeWithRatio = availableSize * config.orderSizeRatio;
+    // 最后和最大持仓限制比较，并保留两位小数
+    return Math.min(sizeWithRatio, config.maxPositionSize).toFixed(2);
   },
 
   // 检查是否可以开仓
