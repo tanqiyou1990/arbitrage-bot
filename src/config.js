@@ -1,6 +1,7 @@
 module.exports = {
   mode: process.env.TRADING_MODE || "simulation",
   maxPositionSize: process.env.MAX_POSITION_SIZE || 0.1,
+  maxPositionAmount: process.env.MAX_POSITION_AMOUNT || 1000, // 最大开仓金额，默认1000U
   orderSizeRatio: process.env.ORDER_SIZE_RATIO || 0.7,
   threshold: process.env.PRICE_THRESHOLD || 0.0006,
   reconnectDelay: process.env.RECONNECT_DELAY || 2000,

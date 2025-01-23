@@ -116,15 +116,21 @@ const tradeManager = {
       : new SimulatedTrader(),
 
   // 修改获取可下单数量的方法
-  getOrderSize(binanceQty, bitgetQty) {
+  getOrderSize(binanceQty, bitgetQty, price) {
     const availableSize = Math.min(
       parseFloat(binanceQty),
       parseFloat(bitgetQty)
     );
     // 应用下单数量比例限制
     const sizeWithRatio = availableSize * config.orderSizeRatio;
-    // 最后和最大持仓限制比较，并保留两位小数
-    return Math.min(sizeWithRatio, config.maxPositionSize).toFixed(2);
+    // 计算金额限制下的数量
+    const maxSizeByAmount = config.maxPositionAmount / price;
+    // 取三个限制中的最小值，并保留两位小数
+    return Math.min(
+      sizeWithRatio,
+      config.maxPositionSize,
+      maxSizeByAmount
+    ).toFixed(2);
   },
 
   // 检查是否可以开仓
@@ -187,7 +193,11 @@ const priceMonitor = {
 
       // Bitget买一价 > Binance卖一价，可以做多Binance-做空Bitget
       if (diff1 > this.threshold && tradeManager.canOpenPosition()) {
-        const size = tradeManager.getOrderSize(binanceQty, bitgetQty);
+        const size = tradeManager.getOrderSize(
+          binanceQty,
+          bitgetQty,
+          binanceBuyPrice
+        );
         await tradeManager.openPosition(
           "long",
           size,
