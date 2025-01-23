@@ -9,7 +9,7 @@ class LiveTrader {
   constructor(config) {
     this.binanceAPI = new BinanceAPI(config.binance);
     this.bitgetAPI = new BitgetAPI(config.bitget);
-    this.symbol = "ETHUSDT";
+    this.symbol = config.symbol; // 使用配置中的交易对
   }
 
   async binanceLongOrder(size, price) {

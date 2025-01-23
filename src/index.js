@@ -268,7 +268,7 @@ const priceMonitor = {
 
 // 修改币安客户端的消息处理
 const binanceClient = new WebSocketClient(
-  "wss://fstream.binance.com/ws/ethusdt@depth5",
+  `wss://fstream.binance.com/ws/${config.symbol.toLowerCase()}@depth5`,
   {
     name: "Binance",
     onMessage: async (data) => {
@@ -292,7 +292,7 @@ const bitgetClient = new WebSocketClient("wss://ws.bitget.com/v2/ws/public", {
       {
         instType: "USDT-FUTURES",
         channel: "books5",
-        instId: "ETHUSDT",
+        instId: config.symbol,
       },
     ],
   },
