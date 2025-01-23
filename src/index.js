@@ -1,6 +1,7 @@
 const WebSocket = require("ws");
 const winston = require("winston");
 const config = require("./config");
+const { LiveTrader, SimulatedTrader } = require("./exchanges");
 
 // 配置日志系统
 const logger = winston.createLogger({
@@ -109,6 +110,10 @@ const tradeManager = {
     bitgetPrice: 0,
   },
   fees: config.fees,
+  trader:
+    config.mode === "live"
+      ? new LiveTrader(config.exchanges)
+      : new SimulatedTrader(),
 
   // 修改获取可下单数量的方法
   getOrderSize(binanceQty, bitgetQty) {
@@ -128,89 +133,39 @@ const tradeManager = {
   },
 
   // 开仓
-  openPosition(type, size, binancePrice, bitgetPrice) {
-    this.position = {
-      size,
+  async openPosition(type, size, binancePrice, bitgetPrice) {
+    const success = await this.trader.openPosition(
       type,
+      size,
       binancePrice,
-      bitgetPrice,
-    };
-    console.log(
-      "\x1b[32m%s\x1b[0m",
-      `开仓：${
-        type === "long" ? "Binance做多-Bitget做空" : "Bitget做多-Binance做空"
-      }`
+      bitgetPrice
     );
-    console.log(`数量：${size}`);
-    console.log(`Binance价格：${binancePrice}`);
-    console.log(`Bitget价格：${bitgetPrice}`);
+    if (success) {
+      this.position = {
+        size,
+        type,
+        binancePrice,
+        bitgetPrice,
+      };
+    }
   },
 
-  // 平仓
-  // 修改平仓方法，添加利润计算
-  closePosition(availableSize, binancePrice, bitgetPrice) {
+  async closePosition(availableSize, binancePrice, bitgetPrice) {
     const closeSize = Math.min(this.position.size, availableSize);
-    this.position.size -= closeSize;
-
-    // 计算利润（包含手续费）
-    let binanceProfit = 0;
-    let bitgetProfit = 0;
-    let totalProfit = 0;
-    let binanceFees = 0;
-    let bitgetFees = 0;
-
-    if (this.position.type === "long") {
-      // Binance做多，Bitget做空的情况
-      // Binance: 开仓买入手续费 + 平仓卖出手续费
-      binanceFees =
-        closeSize * this.position.binancePrice * this.fees.binance +
-        closeSize * binancePrice * this.fees.binance;
-      // Bitget: 开仓卖出手续费 + 平仓买入手续费
-      bitgetFees =
-        closeSize * this.position.bitgetPrice * this.fees.bitget +
-        closeSize * bitgetPrice * this.fees.bitget;
-
-      binanceProfit =
-        closeSize * (binancePrice - this.position.binancePrice) - binanceFees;
-      bitgetProfit =
-        closeSize * (this.position.bitgetPrice - bitgetPrice) - bitgetFees;
-    } else {
-      // Bitget做多，Binance做空的情况
-      // Binance: 开仓卖出手续费 + 平仓买入手续费
-      binanceFees =
-        closeSize * this.position.binancePrice * this.fees.binance +
-        closeSize * binancePrice * this.fees.binance;
-      // Bitget: 开仓买入手续费 + 平仓卖出手续费
-      bitgetFees =
-        closeSize * this.position.bitgetPrice * this.fees.bitget +
-        closeSize * bitgetPrice * this.fees.bitget;
-
-      binanceProfit =
-        closeSize * (this.position.binancePrice - binancePrice) - binanceFees;
-      bitgetProfit =
-        closeSize * (bitgetPrice - this.position.bitgetPrice) - bitgetFees;
-    }
-
-    totalProfit = binanceProfit + bitgetProfit;
-
-    console.log(
-      "\x1b[33m%s\x1b[0m",
-      `平仓：${closeSize}/${this.position.size}`
+    const success = await this.trader.closePosition(
+      this.position.type,
+      closeSize,
+      binancePrice,
+      bitgetPrice
     );
-    console.log(`Binance价格：${binancePrice}`);
-    console.log(`Bitget价格：${bitgetPrice}`);
-    console.log("\x1b[36m%s\x1b[0m", `本次平仓利润：`);
-    console.log(`Binance利润(含手续费)：${binanceProfit.toFixed(4)} USDT`);
-    console.log(`Binance手续费：${binanceFees.toFixed(4)} USDT`);
-    console.log(`Bitget利润(含手续费)：${bitgetProfit.toFixed(4)} USDT`);
-    console.log(`Bitget手续费：${bitgetFees.toFixed(4)} USDT`);
-    console.log(`总手续费：${(binanceFees + bitgetFees).toFixed(4)} USDT`);
-    console.log(`总利润(含手续费)：${totalProfit.toFixed(4)} USDT`);
 
-    if (this.position.size === 0) {
-      this.position.type = null;
-      this.position.binancePrice = 0;
-      this.position.bitgetPrice = 0;
+    if (success) {
+      this.position.size -= closeSize;
+      if (this.position.size === 0) {
+        this.position.type = null;
+        this.position.binancePrice = 0;
+        this.position.bitgetPrice = 0;
+      }
     }
   },
 };
@@ -221,7 +176,7 @@ const priceMonitor = {
   bitget: { bids: [], asks: [] },
   threshold: config.threshold,
 
-  checkPriceDifference() {
+  async checkPriceDifference() {
     // 计算第一组价差（Binance做多-Bitget做空）
     if (this.binance.asks.length && this.bitget.bids.length) {
       const binanceBuyPrice = parseFloat(this.binance.asks[0][0]);
@@ -233,7 +188,7 @@ const priceMonitor = {
       // Bitget买一价 > Binance卖一价，可以做多Binance-做空Bitget
       if (diff1 > this.threshold && tradeManager.canOpenPosition()) {
         const size = tradeManager.getOrderSize(binanceQty, bitgetQty);
-        tradeManager.openPosition(
+        await tradeManager.openPosition(
           "long",
           size,
           binanceBuyPrice,
@@ -253,7 +208,7 @@ const priceMonitor = {
       // Binance买一价 > Bitget卖一价，可以做多Bitget-做空Binance
       if (diff2 > this.threshold && tradeManager.canOpenPosition()) {
         const size = tradeManager.getOrderSize(binanceQty, bitgetQty);
-        tradeManager.openPosition(
+        await tradeManager.openPosition(
           "short",
           size,
           binanceSellPrice,
@@ -279,7 +234,7 @@ const priceMonitor = {
             this.binance.bids[0][1],
             this.bitget.asks[0][1]
           );
-          tradeManager.closePosition(
+          await tradeManager.closePosition(
             availableSize,
             binanceSellPrice,
             bitgetBuyPrice
@@ -316,20 +271,19 @@ const binanceClient = new WebSocketClient(
   "wss://fstream.binance.com/ws/ethusdt@depth5",
   {
     name: "Binance",
-    onMessage: (data) => {
+    onMessage: async (data) => {
       var msg = data.toString();
       if (msg === "ping") return;
       const message = JSON.parse(msg);
       if (message.e === "depthUpdate") {
         priceMonitor.binance.bids = message.b;
         priceMonitor.binance.asks = message.a;
-        priceMonitor.checkPriceDifference();
+        await priceMonitor.checkPriceDifference();
       }
     },
   }
 );
 
-// 修改 Bitget 客户端的消息处理
 const bitgetClient = new WebSocketClient("wss://ws.bitget.com/v2/ws/public", {
   name: "Bitget",
   subscribeMessage: {
@@ -344,14 +298,14 @@ const bitgetClient = new WebSocketClient("wss://ws.bitget.com/v2/ws/public", {
   },
   pingMessage: "ping",
   pingInterval: config.pingInterval,
-  onMessage: (data) => {
+  onMessage: async (data) => {
     if (data.toString() !== "pong") {
       const message = JSON.parse(data.toString());
       if (message.action === "snapshot") {
         const books = message.data[0];
         priceMonitor.bitget.asks = books.asks;
         priceMonitor.bitget.bids = books.bids;
-        priceMonitor.checkPriceDifference();
+        await priceMonitor.checkPriceDifference();
       }
     }
   },
