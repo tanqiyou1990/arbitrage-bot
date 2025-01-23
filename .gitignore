@@ -1,0 +1,19 @@
+# 依赖
+node_modules/
+
+# 日志
+logs/
+*.log
+
+# 环境变量
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+.docker/
+
+# 系统文件
+.DS_Store
