@@ -28,6 +28,7 @@ class WebSocketClient {
       this.ws = new WebSocket(this.url);
 
       this.ws.on("open", () => {
+        this.isConnected = true;
         logger.info(`Connected to ${this.options.name}`);
 
         // 发送订阅消息
@@ -143,56 +144,60 @@ const tradeManager = {
 
   // 开仓时计算并设置爆仓价格
   async openPosition(type, size, binancePrice, bitgetPrice) {
-    const success = await this.trader.openPosition(
-      type,
-      size,
-      binancePrice,
-      bitgetPrice
-    );
-    if (success) {
-      if (config.mode === "live") {
-        // 实盘模式才计算爆仓价格和止损价格
-        const balance = await this.trader.getAccountBalance();
-        const liquidationPrice = this.calculateLiquidationPrice(
-          type === "long" ? binancePrice : bitgetPrice,
-          size,
-          balance
-        );
-        const stopLossPrice =
-          type === "long"
-            ? liquidationPrice +
-              (binancePrice - liquidationPrice) * config.stopLossPercentage
-            : liquidationPrice -
-              (liquidationPrice - bitgetPrice) * config.stopLossPercentage;
+    try {
+      const success = await this.trader.openPosition(
+        type,
+        size,
+        binancePrice,
+        bitgetPrice
+      );
+      if (success) {
+        if (config.mode === "live") {
+          // 实盘模式才计算爆仓价格和止损价格
+          const balance = await this.trader.getAccountBalance();
+          const liquidationPrice = this.calculateLiquidationPrice(
+            type === "long" ? binancePrice : bitgetPrice,
+            size,
+            balance
+          );
+          const stopLossPrice =
+            type === "long"
+              ? liquidationPrice +
+                (binancePrice - liquidationPrice) * config.stopLossPercentage
+              : liquidationPrice -
+                (liquidationPrice - bitgetPrice) * config.stopLossPercentage;
 
-        this.position = {
-          size,
-          type,
-          binancePrice,
-          bitgetPrice,
-          liquidationPrice,
-          stopLossPrice,
-        };
+          this.position = {
+            size,
+            type,
+            binancePrice,
+            bitgetPrice,
+            liquidationPrice,
+            stopLossPrice,
+          };
 
-        logger.info("开仓信息:", {
-          type,
-          size,
-          binancePrice,
-          bitgetPrice,
-          liquidationPrice,
-          stopLossPrice,
-        });
-      } else {
-        // 模拟交易模式只记录基本信息
-        this.position = {
-          size,
-          type,
-          binancePrice,
-          bitgetPrice,
-          liquidationPrice: 0,
-          stopLossPrice: 0,
-        };
+          logger.info("开仓信息:", {
+            type,
+            size,
+            binancePrice,
+            bitgetPrice,
+            liquidationPrice,
+            stopLossPrice,
+          });
+        } else {
+          // 模拟交易模式只记录基本信息
+          this.position = {
+            size,
+            type,
+            binancePrice,
+            bitgetPrice,
+            liquidationPrice: 0,
+            stopLossPrice: 0,
+          };
+        }
       }
+    } catch (error) {
+      logger.error("开仓发生异常", error);
     }
   },
 
@@ -200,9 +205,12 @@ const tradeManager = {
   checkStopLoss(currentPrice) {
     if (!this.position.size || config.mode !== "live") return false;
 
+    // 这里使用了未定义的 price 变量，应该使用 currentPrice
     if (
-      (this.position.type === "long" && price <= this.position.stopLossPrice) ||
-      (this.position.type === "short" && price >= this.position.stopLossPrice)
+      (this.position.type === "long" &&
+        currentPrice <= this.position.stopLossPrice) ||
+      (this.position.type === "short" &&
+        currentPrice >= this.position.stopLossPrice)
     ) {
       return true;
     }
@@ -239,6 +247,21 @@ const priceMonitor = {
   threshold: config.threshold,
 
   async checkPriceDifference() {
+    // 检查两个交易所的连接状态
+    if (!binanceClient.isConnected || !bitgetClient.isConnected) {
+      logger.warn("交易所连接断开，跳过本次检查");
+      return;
+    }
+    // 添加价格有效性检查
+    if (
+      !this.isValidPrice(this.binance.asks) ||
+      !this.isValidPrice(this.binance.bids) ||
+      !this.isValidPrice(this.bitget.asks) ||
+      !this.isValidPrice(this.bitget.bids)
+    ) {
+      logger.warn("检测到无效价格，跳过本次检查");
+      return;
+    }
     // 计算第一组价差（Binance做多-Bitget做空）
     if (this.binance.asks.length && this.bitget.bids.length) {
       const binanceBuyPrice = parseFloat(this.binance.asks[0][0]);
@@ -272,8 +295,13 @@ const priceMonitor = {
       const diff2 = (binanceSellPrice - bitgetBuyPrice) / bitgetBuyPrice;
 
       // Binance买一价 > Bitget卖一价，可以做多Bitget-做空Binance
+      // 计算第二组价差时
       if (diff2 > this.threshold && tradeManager.canOpenPosition()) {
-        const size = tradeManager.getOrderSize(binanceQty, bitgetQty);
+        const size = tradeManager.getOrderSize(
+          binanceQty,
+          bitgetQty,
+          bitgetBuyPrice // 需要添加价格参数
+        );
         await tradeManager.openPosition(
           "short",
           size,
@@ -304,6 +332,15 @@ const priceMonitor = {
         );
       }
     }
+  },
+  // 添加价格检查方法
+  isValidPrice(priceLevel) {
+    return (
+      priceLevel &&
+      priceLevel.length > 0 &&
+      !isNaN(parseFloat(priceLevel[0][0])) &&
+      parseFloat(priceLevel[0][0]) > 0
+    );
   },
 };
 
