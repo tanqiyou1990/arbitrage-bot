@@ -79,6 +79,28 @@ class BinanceAPI {
   async closeShort(symbol, quantity) {
     return this.openLong(symbol, quantity);
   }
+
+  async setLeverage(symbol, leverage) {
+    const endpoint = "/fapi/v1/leverage";
+    const timestamp = Date.now();
+    const params = {
+      symbol: symbol,
+      leverage: leverage,
+      timestamp: timestamp,
+    };
+
+    const signature = this.generateSignature(params);
+    const url = `${this.baseUrl}${endpoint}?${new URLSearchParams(
+      params
+    ).toString()}&signature=${signature}`;
+
+    const response = await axios.post(url, null, {
+      headers: {
+        "X-MBX-APIKEY": this.apiKey,
+      },
+    });
+    return response.data;
+  }
 }
 
 module.exports = BinanceAPI;

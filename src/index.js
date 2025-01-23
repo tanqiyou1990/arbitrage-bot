@@ -123,14 +123,13 @@ const tradeManager = {
     );
     // 应用下单数量比例限制
     const sizeWithRatio = availableSize * config.orderSizeRatio;
-    // 计算金额限制下的数量
-    const maxSizeByAmount = config.maxPositionAmount / price;
-    // 取三个限制中的最小值，并保留两位小数
-    return Math.min(
-      sizeWithRatio,
-      config.maxPositionSize,
-      maxSizeByAmount
-    ).toFixed(2);
+
+    // 根据保证金限额计算最大可开仓数量
+    const maxSizeByAmount =
+      (config.maxPositionAmount * config.leverage) / price;
+
+    // 取两个限制中的最小值，并保留两位小数
+    return Math.min(sizeWithRatio, maxSizeByAmount).toFixed(2);
   },
 
   // 检查是否可以开仓

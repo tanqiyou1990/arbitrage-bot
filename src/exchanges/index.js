@@ -9,7 +9,23 @@ class LiveTrader {
   constructor(config) {
     this.binanceAPI = new BinanceAPI(config.binance);
     this.bitgetAPI = new BitgetAPI(config.bitget);
-    this.symbol = config.symbol; // 使用配置中的交易对
+    this.symbol = config.symbol;
+    this.leverage = config.leverage;
+
+    // 初始化时设置杠杆倍数
+    this.initLeverage();
+  }
+
+  async initLeverage() {
+    try {
+      // 设置币安杠杆
+      await this.binanceAPI.setLeverage(this.symbol, this.leverage);
+      // 设置Bitget杠杆
+      await this.bitgetAPI.setLeverage(this.symbol, this.leverage);
+      logger.info(`设置杠杆倍数成功: ${this.leverage}倍`);
+    } catch (error) {
+      logger.error("设置杠杆倍数失败:", error);
+    }
   }
 
   async binanceLongOrder(size, price) {

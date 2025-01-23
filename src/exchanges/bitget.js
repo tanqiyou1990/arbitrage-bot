@@ -141,6 +141,34 @@ class BitgetAPI {
     });
     return response.data;
   }
+
+  async setLeverage(symbol, leverage) {
+    const endpoint = "/api/mix/v1/account/setLeverage";
+    const timestamp = Date.now().toString();
+    const body = {
+      symbol: symbol,
+      marginCoin: "USDT",
+      leverage: leverage,
+    };
+
+    const signature = this.generateSignature(
+      timestamp,
+      "POST",
+      endpoint,
+      JSON.stringify(body)
+    );
+
+    const response = await axios.post(`${this.baseUrl}${endpoint}`, body, {
+      headers: {
+        "ACCESS-KEY": this.apiKey,
+        "ACCESS-SIGN": signature,
+        "ACCESS-TIMESTAMP": timestamp,
+        "ACCESS-PASSPHRASE": this.passphrase,
+        "Content-Type": "application/json",
+      },
+    });
+    return response.data;
+  }
 }
 
 module.exports = BitgetAPI;
