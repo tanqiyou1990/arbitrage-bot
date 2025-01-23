@@ -150,49 +150,56 @@ const tradeManager = {
       bitgetPrice
     );
     if (success) {
-      // 获取账户余额
-      const balance = await this.trader.getAccountBalance();
+      if (config.mode === "live") {
+        // 实盘模式才计算爆仓价格和止损价格
+        const balance = await this.trader.getAccountBalance();
+        const liquidationPrice = this.calculateLiquidationPrice(
+          type === "long" ? binancePrice : bitgetPrice,
+          size,
+          balance
+        );
+        const stopLossPrice =
+          type === "long"
+            ? liquidationPrice +
+              (binancePrice - liquidationPrice) * config.stopLossPercentage
+            : liquidationPrice -
+              (liquidationPrice - bitgetPrice) * config.stopLossPercentage;
 
-      // 计算爆仓价格
-      const liquidationPrice = this.calculateLiquidationPrice(
-        type === "long" ? binancePrice : bitgetPrice,
-        size,
-        balance
-      );
+        this.position = {
+          size,
+          type,
+          binancePrice,
+          bitgetPrice,
+          liquidationPrice,
+          stopLossPrice,
+        };
 
-      // 计算止损价格（距离爆仓线的百分比）
-      const stopLossPrice =
-        type === "long"
-          ? liquidationPrice +
-            (binancePrice - liquidationPrice) * config.stopLossPercentage
-          : liquidationPrice -
-            (liquidationPrice - bitgetPrice) * config.stopLossPercentage;
-
-      this.position = {
-        size,
-        type,
-        binancePrice,
-        bitgetPrice,
-        liquidationPrice,
-        stopLossPrice,
-      };
-
-      logger.info("开仓信息:", {
-        type,
-        size,
-        binancePrice,
-        bitgetPrice,
-        liquidationPrice,
-        stopLossPrice,
-      });
+        logger.info("开仓信息:", {
+          type,
+          size,
+          binancePrice,
+          bitgetPrice,
+          liquidationPrice,
+          stopLossPrice,
+        });
+      } else {
+        // 模拟交易模式只记录基本信息
+        this.position = {
+          size,
+          type,
+          binancePrice,
+          bitgetPrice,
+          liquidationPrice: 0,
+          stopLossPrice: 0,
+        };
+      }
     }
   },
 
   // 检查是否需要止损
   checkStopLoss(currentPrice) {
-    if (!this.position.size) return false;
+    if (!this.position.size || config.mode !== "live") return false;
 
-    const price = this.position.type === "long" ? currentPrice : currentPrice;
     if (
       (this.position.type === "long" && price <= this.position.stopLossPrice) ||
       (this.position.type === "short" && price >= this.position.stopLossPrice)
