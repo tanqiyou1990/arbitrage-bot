@@ -125,8 +125,6 @@ const tradeManager = {
   },
 
   // 计算爆仓价格
-  // 修改计算爆仓价格的方法
-  // 计算爆仓价格
   calculateLiquidationPrice(entryPrice, size, balance) {
     const contractValue = entryPrice * size; // 合约价值
     const maintenanceMarginRate = 0.005; // 维持保证金率
@@ -202,18 +200,26 @@ const tradeManager = {
   },
 
   // 检查是否需要止损
-  checkStopLoss(currentPrice) {
+  checkStopLoss(binancePrice, bitgetPrice) {
     if (!this.position.size || config.mode !== "live") return false;
 
-    if (
-      (this.position.type === "long" &&
-        currentPrice <= this.position.stopLossPrice) ||
-      (this.position.type === "short" &&
-        currentPrice >= this.position.stopLossPrice)
-    ) {
-      return true;
+    if (this.position.type === "long") {
+      // 做多持仓需要同时监控：
+      // 1. 币安买一价，因为在币安做多
+      // 2. Bitget卖一价，因为在Bitget做空
+      return (
+        binancePrice <= this.position.stopLossPrice ||
+        bitgetPrice >= this.position.stopLossPrice
+      );
+    } else {
+      // 做空持仓需要同时监控：
+      // 1. 币安卖一价，因为在币安做空
+      // 2. Bitget买一价，因为在Bitget做多
+      return (
+        binancePrice >= this.position.stopLossPrice ||
+        bitgetPrice <= this.position.stopLossPrice
+      );
     }
-    return false;
   },
 
   // 修复 closePosition 方法的位置和语法
@@ -261,54 +267,6 @@ const priceMonitor = {
       logger.warn("检测到无效价格，跳过本次检查");
       return;
     }
-    // 计算第一组价差（Binance做多-Bitget做空）
-    if (this.binance.asks.length && this.bitget.bids.length) {
-      const binanceBuyPrice = parseFloat(this.binance.asks[0][0]);
-      const bitgetSellPrice = parseFloat(this.bitget.bids[0][0]);
-      const binanceQty = this.binance.asks[0][1];
-      const bitgetQty = this.bitget.bids[0][1];
-      const diff1 = (bitgetSellPrice - binanceBuyPrice) / binanceBuyPrice;
-
-      // Bitget买一价 > Binance卖一价，可以做多Binance-做空Bitget
-      if (diff1 > this.threshold.open && tradeManager.canOpenPosition()) {
-        const size = tradeManager.getOrderSize(
-          binanceQty,
-          bitgetQty,
-          binanceBuyPrice
-        );
-        await tradeManager.openPosition(
-          "long",
-          size,
-          binanceBuyPrice,
-          bitgetSellPrice
-        );
-      }
-    }
-
-    // 计算第二组价差（Bitget做多-Binance做空）
-    if (this.binance.bids.length && this.bitget.asks.length) {
-      const bitgetBuyPrice = parseFloat(this.bitget.asks[0][0]);
-      const binanceSellPrice = parseFloat(this.binance.bids[0][0]);
-      const binanceQty = this.binance.bids[0][1];
-      const bitgetQty = this.bitget.asks[0][1];
-      const diff2 = (binanceSellPrice - bitgetBuyPrice) / bitgetBuyPrice;
-
-      // Binance买一价 > Bitget卖一价，可以做多Bitget-做空Binance
-      // 计算第二组价差时
-      if (diff2 > this.threshold.open && tradeManager.canOpenPosition()) {
-        const size = tradeManager.getOrderSize(
-          binanceQty,
-          bitgetQty,
-          bitgetBuyPrice // 需要添加价格参数
-        );
-        await tradeManager.openPosition(
-          "short",
-          size,
-          binanceSellPrice,
-          bitgetBuyPrice
-        );
-      }
-    }
 
     // 获取两个交易所的买卖价格
     const binanceBid = parseFloat(this.binance.bids[0][0]); // 币安买一价（可以用来做空）
@@ -346,10 +304,9 @@ const priceMonitor = {
     // 检查平仓条件
     if (tradeManager.position.size > 0) {
       if (tradeManager.position.type === "long") {
-        // 做多持仓：币安做多，Bitget做空
-        // 当Bitget的买一价高于币安的卖一价达到平仓阈值时平仓
+        // 做多持仓平仓：币安做空(Bid)，Bitget做多(Ask)
         const closeDiff = (bitgetBid - binanceAsk) / binanceAsk;
-        if (closeDiff < this.threshold.close) {
+        if (closeDiff > this.threshold.close) {
           logger.info("触发盈利平仓", {
             type: "long",
             closeDiff,
@@ -357,16 +314,15 @@ const priceMonitor = {
           });
           await tradeManager.closePosition(
             tradeManager.position.size,
-            binanceBid, // 币安市价卖出
-            bitgetAsk // Bitget市价买入
+            binanceBid, // 币安以买一价卖出平仓
+            bitgetAsk // Bitget以卖一价买入平仓
           );
           return;
         }
       } else {
-        // 做空持仓：币安做空，Bitget做多
-        // 当币安的买一价高于Bitget的卖一价达到平仓阈值时平仓
+        // 做空持仓平仓：币安做多(Ask)，Bitget做空(Bid)
         const closeDiff = (binanceBid - bitgetAsk) / bitgetAsk;
-        if (closeDiff < this.threshold.close) {
+        if (closeDiff > this.threshold.close) {
           logger.info("触发盈利平仓", {
             type: "short",
             closeDiff,
@@ -374,8 +330,8 @@ const priceMonitor = {
           });
           await tradeManager.closePosition(
             tradeManager.position.size,
-            binanceAsk, // 币安市价买入
-            bitgetBid // Bitget市价卖出
+            binanceAsk, // 币安以卖一价买入平仓
+            bitgetBid // Bitget以买一价卖出平仓
           );
           return;
         }
@@ -384,19 +340,28 @@ const priceMonitor = {
       // 检查止损条件
       const currentPrice =
         tradeManager.position.type === "long"
-          ? binanceBid // 做多看币安买一价
-          : bitgetAsk; // 做空看Bitget卖一价
+          ? binanceBid // 做多持仓看币安买一价
+          : bitgetAsk; // 做空持仓看Bitget卖一价
 
-      if (tradeManager.checkStopLoss(currentPrice)) {
+      // 检查止损条件
+      if (
+        tradeManager.checkStopLoss(
+          tradeManager.position.type === "long" ? binanceBid : binanceAsk,
+          tradeManager.position.type === "long" ? bitgetAsk : bitgetBid
+        )
+      ) {
         logger.warn("触发止损平仓", {
-          currentPrice,
+          binancePrice:
+            tradeManager.position.type === "long" ? binanceBid : binanceAsk,
+          bitgetPrice:
+            tradeManager.position.type === "long" ? bitgetAsk : bitgetBid,
           stopLossPrice: tradeManager.position.stopLossPrice,
           liquidationPrice: tradeManager.position.liquidationPrice,
         });
         await tradeManager.closePosition(
           tradeManager.position.size,
-          binanceAsk,
-          bitgetBid
+          tradeManager.position.type === "long" ? binanceBid : binanceAsk, // 做多用买一价卖出，做空用卖一价买入
+          tradeManager.position.type === "long" ? bitgetAsk : bitgetBid // 做多用卖一价买入，做空用买一价卖出
         );
       }
     }
