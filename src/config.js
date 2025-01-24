@@ -3,7 +3,11 @@ module.exports = {
   maxPositionAmount: process.env.MAX_POSITION_AMOUNT || 1000, // 10000U账户情况下最大保证金额度
   leverage: process.env.LEVERAGE || 100,
   orderSizeRatio: process.env.ORDER_SIZE_RATIO || 0.7,
-  threshold: process.env.PRICE_THRESHOLD || 0.0006,
+  // 将单一阈值拆分为开仓和平仓阈值
+  threshold: {
+    open: process.env.OPEN_THRESHOLD || 0.0006, // 开仓价差要求
+    close: process.env.CLOSE_THRESHOLD || 0.0002, // 平仓价差要求，通常小于开仓阈值
+  },
   reconnectDelay: process.env.RECONNECT_DELAY || 2000,
   pingInterval: process.env.PING_INTERVAL || 18000,
   symbol: process.env.TRADING_SYMBOL || "ETHUSDT",
