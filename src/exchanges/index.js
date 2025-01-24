@@ -10,9 +10,8 @@ class LiveTrader {
     this.binanceAPI = new BinanceAPI(config.binance);
     this.bitgetAPI = new BitgetAPI(config.bitget);
     this.symbol = config.symbol;
-    this.leverage = config.leverage;
+    this.leverage = config.trading.leverage; // 更新引用
 
-    // 初始化时设置杠杆倍数
     this.initLeverage();
   }
 
@@ -112,10 +111,19 @@ class SimulatedTrader {
     };
     this.fees = config.fees;
     // 添加模拟账户余额
-    this.balance = 10000; // 模拟10000USDT初始资金
+    this.balance = 10000; // 设置初始余额为10000 USDT
   }
 
   async openPosition(type, size, binancePrice, bitgetPrice) {
+    // 计算所需保证金
+    const margin = (size * binancePrice) / config.trading.leverage;
+
+    // 检查余额是否足够
+    if (margin > this.balance) {
+      console.log("\x1b[31m%s\x1b[0m", "余额不足，无法开仓");
+      return false;
+    }
+
     // 保存开仓信息，用于后续计算盈亏
     this.position = {
       size,
@@ -123,6 +131,9 @@ class SimulatedTrader {
       binancePrice,
       bitgetPrice,
     };
+
+    // 扣除保证金
+    this.balance -= margin;
 
     console.log(
       "\x1b[32m%s\x1b[0m",
@@ -133,10 +144,8 @@ class SimulatedTrader {
     console.log(`数量：${size}`);
     console.log(`Binance价格：${binancePrice}`);
     console.log(`Bitget价格：${bitgetPrice}`);
-    console.log(`账户余额：${this.balance} USDT`);
-    console.log(
-      `保证金使用：${((size * binancePrice) / config.leverage).toFixed(2)} USDT`
-    );
+    console.log(`账户余额：${this.balance.toFixed(2)} USDT`);
+    console.log(`保证金使用：${margin.toFixed(2)} USDT`);
     return true;
   }
 
@@ -188,6 +197,10 @@ class SimulatedTrader {
     console.log(`Bitget手续费：${bitgetFees.toFixed(4)} USDT`);
     console.log(`总手续费：${(binanceFees + bitgetFees).toFixed(4)} USDT`);
     console.log(`总利润(含手续费)：${totalProfit.toFixed(4)} USDT`);
+
+    // 更新账户余额
+    this.balance += totalProfit;
+    console.log(`当前账户余额：${this.balance.toFixed(2)} USDT`);
 
     return true;
   }

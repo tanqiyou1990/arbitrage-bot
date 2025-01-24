@@ -94,8 +94,8 @@ const tradeManager = {
     type: null,
     binancePrice: 0,
     bitgetPrice: 0,
-    liquidationPrice: 0, // 爆仓价格
-    stopLossPrice: 0, // 止损价格
+    liquidationPrice: 0,
+    stopLossPrice: 0,
   },
   fees: config.fees,
   trader:
@@ -103,29 +103,25 @@ const tradeManager = {
       ? new LiveTrader(config.exchanges)
       : new SimulatedTrader(),
 
+  // 检查是否可以开仓
+  canOpenPosition() {
+    return this.position.size === 0;
+  },
+
   // 修改获取可下单数量的方法
   getOrderSize(binanceQty, bitgetQty, price) {
     const availableSize = Math.min(
       parseFloat(binanceQty),
       parseFloat(bitgetQty)
     );
-    // 应用下单数量比例限制
-    const sizeWithRatio = availableSize * config.orderSizeRatio;
-
-    // 根据保证金限额计算最大可开仓数量
+    const sizeWithRatio = availableSize * config.trading.orderSizeRatio;
     const maxSizeByAmount =
-      (config.maxPositionAmount * config.leverage) / price;
+      (config.trading.maxPositionAmount * config.trading.leverage) / price;
+    const finalSize = Math.min(sizeWithRatio, maxSizeByAmount);
 
-    // 取两个限制中的最小值，并保留两位小数
-    return Math.min(sizeWithRatio, maxSizeByAmount).toFixed(2);
+    return finalSize < config.trading.minOrderSize ? 0 : finalSize.toFixed(2);
   },
 
-  // 检查是否可以开仓
-  canOpenPosition() {
-    return this.position.size === 0;
-  },
-
-  // 计算爆仓价格
   calculateLiquidationPrice(entryPrice, size, balance) {
     const contractValue = entryPrice * size; // 合约价值
     const maintenanceMarginRate = 0.005; // 维持保证金率
@@ -134,15 +130,17 @@ const tradeManager = {
     // 对于做多，价格下跌会导致爆仓
     if (this.position.type === "long") {
       return entryPrice * (1 - (balance - maintenanceMargin) / contractValue);
-    }
-    // 对于做空，价格上涨会导致爆仓
-    else {
+    } else {
       return entryPrice * (1 + (balance - maintenanceMargin) / contractValue);
     }
   },
 
-  // 开仓时计算并设置爆仓价格
   async openPosition(type, size, binancePrice, bitgetPrice) {
+    // 如果size为0，取消开仓
+    if (size <= 0) {
+      logger.info("下单数量小于最小限制，取消开仓");
+      return false;
+    }
     try {
       const success = await this.trader.openPosition(
         type,
@@ -162,9 +160,11 @@ const tradeManager = {
           const stopLossPrice =
             type === "long"
               ? liquidationPrice +
-                (binancePrice - liquidationPrice) * config.stopLossPercentage
+                (binancePrice - liquidationPrice) *
+                  config.trading.stopLossPercentage
               : liquidationPrice -
-                (liquidationPrice - bitgetPrice) * config.stopLossPercentage;
+                (liquidationPrice - bitgetPrice) *
+                  config.trading.stopLossPercentage;
 
           this.position = {
             size,
