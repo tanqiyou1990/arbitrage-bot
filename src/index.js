@@ -114,6 +114,11 @@ const tradeManager = {
       parseFloat(binanceQty),
       parseFloat(bitgetQty)
     );
+    console.log(
+      "Bianance和Bitget挂单数量:",
+      parseFloat(binanceQty),
+      parseFloat(bitgetQty)
+    );
     const sizeWithRatio = availableSize * config.trading.orderSizeRatio;
     const maxSizeByAmount =
       (config.trading.maxPositionAmount * config.trading.leverage) / price;
