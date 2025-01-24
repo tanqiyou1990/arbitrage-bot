@@ -1,16 +1,30 @@
 const winston = require("winston");
+const { format } = winston;
 
+// 创建自定义格式
+const customFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} ${level}: ${message}`;
+});
+
+// 创建 logger 实例
 const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
+  format: format.combine(
+    format.timestamp({
+      format: "YYYY-MM-DD HH:mm:ss",
+    }),
+    format.colorize(),
+    customFormat
   ),
   transports: [
-    new winston.transports.File({ filename: "error.log", level: "error" }),
-    new winston.transports.File({ filename: "combined.log" }),
-    new winston.transports.Console({
-      format: winston.format.simple(),
+    // 控制台输出
+    new winston.transports.Console(),
+    // 文件输出
+    new winston.transports.File({
+      filename: "logs/error.log",
+      level: "error",
+    }),
+    new winston.transports.File({
+      filename: "logs/combined.log",
     }),
   ],
 });

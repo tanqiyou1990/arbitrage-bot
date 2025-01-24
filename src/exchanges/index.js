@@ -111,9 +111,19 @@ class SimulatedTrader {
       bitgetPrice: 0,
     };
     this.fees = config.fees;
+    // 添加模拟账户余额
+    this.balance = 10000; // 模拟10000USDT初始资金
   }
 
   async openPosition(type, size, binancePrice, bitgetPrice) {
+    // 保存开仓信息，用于后续计算盈亏
+    this.position = {
+      size,
+      type,
+      binancePrice,
+      bitgetPrice,
+    };
+
     console.log(
       "\x1b[32m%s\x1b[0m",
       `开仓：${
@@ -123,6 +133,10 @@ class SimulatedTrader {
     console.log(`数量：${size}`);
     console.log(`Binance价格：${binancePrice}`);
     console.log(`Bitget价格：${bitgetPrice}`);
+    console.log(`账户余额：${this.balance} USDT`);
+    console.log(
+      `保证金使用：${((size * binancePrice) / config.leverage).toFixed(2)} USDT`
+    );
     return true;
   }
 

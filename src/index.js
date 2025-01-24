@@ -20,6 +20,7 @@ class WebSocketClient {
     this.reconnectDelay = config.reconnectDelay;
     this.heartbeatInterval = null;
     this.ws = null;
+    this.isConnected = false; // 添加初始化
     this.connect();
   }
 
@@ -304,14 +305,9 @@ const priceMonitor = {
     // 检查平仓条件
     if (tradeManager.position.size > 0) {
       if (tradeManager.position.type === "long") {
-        // 做多持仓平仓：币安做空(Bid)，Bitget做多(Ask)
-        const closeDiff = (bitgetBid - binanceAsk) / binanceAsk;
+        // 做多持仓平仓：币安Bid卖出 > Bitget Ask买入
+        const closeDiff = (binanceBid - bitgetAsk) / bitgetAsk;
         if (closeDiff > this.threshold.close) {
-          logger.info("触发盈利平仓", {
-            type: "long",
-            closeDiff,
-            closeThreshold: this.threshold.close,
-          });
           await tradeManager.closePosition(
             tradeManager.position.size,
             binanceBid, // 币安以买一价卖出平仓
@@ -320,14 +316,9 @@ const priceMonitor = {
           return;
         }
       } else {
-        // 做空持仓平仓：币安做多(Ask)，Bitget做空(Bid)
-        const closeDiff = (binanceBid - bitgetAsk) / bitgetAsk;
+        // 做空持仓平仓：Bitget Bid卖出 > 币安Ask买入
+        const closeDiff = (bitgetBid - binanceAsk) / binanceAsk;
         if (closeDiff > this.threshold.close) {
-          logger.info("触发盈利平仓", {
-            type: "short",
-            closeDiff,
-            closeThreshold: this.threshold.close,
-          });
           await tradeManager.closePosition(
             tradeManager.position.size,
             binanceAsk, // 币安以卖一价买入平仓
@@ -338,30 +329,16 @@ const priceMonitor = {
       }
 
       // 检查止损条件
-      const currentPrice =
-        tradeManager.position.type === "long"
-          ? binanceBid // 做多持仓看币安买一价
-          : bitgetAsk; // 做空持仓看Bitget卖一价
-
-      // 检查止损条件
       if (
         tradeManager.checkStopLoss(
           tradeManager.position.type === "long" ? binanceBid : binanceAsk,
           tradeManager.position.type === "long" ? bitgetAsk : bitgetBid
         )
       ) {
-        logger.warn("触发止损平仓", {
-          binancePrice:
-            tradeManager.position.type === "long" ? binanceBid : binanceAsk,
-          bitgetPrice:
-            tradeManager.position.type === "long" ? bitgetAsk : bitgetBid,
-          stopLossPrice: tradeManager.position.stopLossPrice,
-          liquidationPrice: tradeManager.position.liquidationPrice,
-        });
         await tradeManager.closePosition(
           tradeManager.position.size,
-          tradeManager.position.type === "long" ? binanceBid : binanceAsk, // 做多用买一价卖出，做空用卖一价买入
-          tradeManager.position.type === "long" ? bitgetAsk : bitgetBid // 做多用卖一价买入，做空用买一价卖出
+          tradeManager.position.type === "long" ? binanceBid : binanceAsk,
+          tradeManager.position.type === "long" ? bitgetAsk : bitgetBid
         );
       }
     }
